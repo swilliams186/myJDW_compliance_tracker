@@ -1,10 +1,12 @@
 import re
+import string
 from pprint import pprint
 
 from bs4 import BeautifulSoup as bs
 from datetime import datetime
 import requests
 import values
+import openpyxl
 import logging
 
 #
@@ -54,6 +56,7 @@ with open("example-rota.html") as doc:
                                             # ['12:00pm', '-', '10:00pm', '<br>(Kitchen)<br>']
 
             if(len(strippedText) != 0):
+
                 # convert times to 24 hour clock
                 # %H is the 24 hour clock, %I is the 12 hour clock and when using the 12 hour clock,
                 # %p qualifies if it is AM or PM. strp = parse, strf = format
@@ -61,49 +64,53 @@ with open("example-rota.html") as doc:
                 startTime = datetime.strftime(startTime,"%H:%M")    #Strips that out, is now 24 hour 14:45
                 endTime = datetime.strptime(splitText[2], "%I:%M%p")
                 endTime = datetime.strftime(endTime, "%H:%M")
-                
+
+                # TODO ignore meetings
 
 
-                #TODO ignore meetings
+                shifts.append({"start": startTime,
+                               "end":   endTime})
+                #Example data structure
+                # 'ROBBINS, WILL': [None,
+                #                   {'end': '20:30', 'start': '11:00'},
+                #                   {'end': '23:45', 'start': '17:30'},
+
+            else: #If no shift that day
+                shifts.append({"start": "day",
+                             "end":    "off"})
+
+
+            extracted_rotas[managerName] = shifts
+
+
+    wb = openpyxl.load_workbook(filename="compliance-tracker-template.xlsx")
+    ws = wb["Kitchen LC Compliance"]      #wb workbook ws worksheet
+
+    for row_index, manager in enumerate(extracted_rotas, values.NAME_COLUMN_START):
+        ws[f"A{row_index}"] = manager
+
+        #B - H for example
+        day_colums = string.ascii_uppercase[values.MAPPINGS['MONDAY']:8:]  #6 kitchen staff
+        print(day_colums)
+        #TODO allow for dynamic amount of staff above
+
+        for y, day in enumerate(day_colums):
+            ws[f"{day}{row_index}"] = (f"{extracted_rotas[manager][y]['start']}"
+                               f"-"
+                               f"{extracted_rotas[manager][y]['end']}"
+                                       )
+                              #COULD USE INDEX OF day in colums
 
 
 
 
+        # print(extracted_rotas[manager][0]["start"])
 
-            # print(strippedText)
-            (shifts.append(strippedText if strippedText != "" else None))  # ' also removes blank lines
-
-        # {name: KYLE,
-        #  shifts[
-        #      {kitchen: 8-15},
-        #        None,  #None = no shift that day
-        #      {kitchen: 9-16}
-        #  ]
-        # }
-        extracted_rotas[managerName] = shifts
-
-    # pprint(extracted_rotas)
-
-#     pprint(rotas)
-#     print(type(rotas))
-# #
-# for manager in rotas:
+        # ws[f"{values.MAPPINGS['MONDAY']}{x}"] = f"{extracted_rotas[manager][0]['start']}-{extracted_rotas[manager][0]['end']}"
 
 
-# <tr class=" employee-rota">
-# 			<td class="employee-name">MEADOWS, REBEKAH</td>
-#
-# 							<td class="day text-center">
-# 									09:45am - 07:00pm					<br>(Manager)<br>
-# 								</td>
-# 							<td class="day text-center">
-# 									03:00pm - 11:45pm					<br>(Manager)<br>
-# 								</td>
-# 							<td class="day text-center">
-# 									03:00pm - 11:45pm					<br>(Manager)<br>
-# 								</td>
-# csrf_token = s.get(values.URL).cookies[values.KEY_CSRF_TOKEN]
-# csrf_name = s.get(values.URL).cookies[values.KEY_CSRF_NAME]
-#
-# print(f"TOKEN {csrf_token}")
-# print(f"NAME {csrf_name}")
+
+    wb.save(filename=("compliance-tracker-template.xlsx"))
+
+
+
