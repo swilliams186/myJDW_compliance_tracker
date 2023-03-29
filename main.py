@@ -31,11 +31,29 @@ s = requests.session()
 # login_result = s.post(values.LOGIN_REQ_URL, headers=values.HEADERS, data=login_payload)
 # #TODO ensure result is correct and login was succesfull.
 
+def formatDateString(unformatedString: string) -> string:
+    return unformatedString.split("<span>")
+
+
+
 with open("example-rota.html") as doc:
     # rota_html = s.get("./example-rota.html")
     soup = bs(doc, "html.parser")
+
+    """Deal with the dates and title"""
+    dates = soup.findAll("th",{"class":"day"}, limit=7) #Collect the first 7 results (each day of the week)
+
+    wc_date = dates[0].get_text()[3:8]  #Used for file naming and title of spreadsheet, removes /n
+    day_strings = [day.get_text().strip()[:3] + " " + day.get_text().strip()[3:]    #Adds a space and cleans up
+                   for day in dates]
+
+
+
+    """" Deals with the employees and their rotas  """
+
     rotas = soup.findAll(attrs={"class": "employee-name"},
                          string=values.KITCHEN_NAMES)  # You can pass a list in? AWESOME!
+
 
     # TODO For each kitchen staff, jump to parent element then extract all class='day text-center"
     extracted_rotas = {}
@@ -83,34 +101,43 @@ with open("example-rota.html") as doc:
             extracted_rotas[managerName] = shifts
 
 
-    wb = openpyxl.load_workbook(filename="compliance-tracker-template.xlsx")
-    ws = wb["Kitchen LC Compliance"]      #wb workbook ws worksheet
+wb = openpyxl.load_workbook(filename="compliance-tracker-template3.xlsx")
+ws = wb["Kitchen LC Compliance"]      #wb workbook ws worksheet
 
-    for row_index, manager in enumerate(extracted_rotas, values.NAME_COLUMN_START):
-        ws[f"A{row_index}"] = manager
+"""Populate the spreadsheet template"""
+ws["A1"] = f"Kitchen Line Check Compliance : w/c {wc_date}"
+for row_index, manager in enumerate(extracted_rotas, values.NAME_COLUMN_START):
 
-        #B - H for example
-        day_colums = string.ascii_uppercase[values.MAPPINGS['MONDAY']:8:]  #6 kitchen staff
-        print(day_colums)
-        #TODO allow for dynamic amount of staff above
+    ws[f"A{row_index}"] = manager
 
-        for y, day in enumerate(day_colums):
-            ws[f"{day}{row_index}"] = (f"{extracted_rotas[manager][y]['start']}"
-                               f"-"
-                               f"{extracted_rotas[manager][y]['end']}"
-                                       )
-                              #COULD USE INDEX OF day in colums
+
+    day_colums = string.ascii_uppercase[values.MAPPINGS['MONDAY']:15]  #6 kitchen staff #B - H for example
+    print(day_colums)
+    for x, day in enumerate(day_colums[::2]):    #Add days of week and dates,
+        print(ws[f"{day}3"])
+        ws[f"{day}3"] = day_strings[x]
 
 
 
+    #TODO allow for dynamic amount of staff above
 
-        # print(extracted_rotas[manager][0]["start"])
+    for y, day in enumerate(day_colums[::2]):
+        #TODO make this more readable - use named variables for start/finish times. Memory is not an issue
+        ws[f"{day}{row_index}"] = (f"{extracted_rotas[manager][y]['start']}"
+                           f"-"
+                           f"{extracted_rotas[manager][y]['end']}"
+                                   )
+        if extracted_rotas[manager][y]['start'] != "day":
+            #TODO THIS IS REALLY SLOPPY
+            ws[f"{day_colums[(y*2) + 1]}{row_index}"] = "N"
+            print(f"DAY: {day} , day+1: {day_colums[(y*2) + 1]}")
+                          #COULD USE INDEX OF day in colums
 
-        # ws[f"{values.MAPPINGS['MONDAY']}{x}"] = f"{extracted_rotas[manager][0]['start']}-{extracted_rotas[manager][0]['end']}"
+
+wb.save(filename=(f"compliance-tracker-wc{wc_date.replace('/', '-')}.xlsx"))
 
 
 
-    wb.save(filename=("compliance-tracker-template.xlsx"))
 
 
 
