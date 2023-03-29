@@ -1,5 +1,11 @@
 import re
+import smtplib
 import string
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from pathlib import Path
 from pprint import pprint
 
 from bs4 import BeautifulSoup as bs
@@ -133,9 +139,35 @@ for row_index, manager in enumerate(extracted_rotas, values.NAME_COLUMN_START):
             print(f"DAY: {day} , day+1: {day_colums[(y*2) + 1]}")
                           #COULD USE INDEX OF day in colums
 
+filename = f"compliance-tracker-wc{wc_date.replace('/', '-')}.xlsx"
+print(filename)
+wb.save(filename=filename)
 
-wb.save(filename=(f"compliance-tracker-wc{wc_date.replace('/', '-')}.xlsx"))
+"""EMAIL THE COMPLIANCE TRACKER"""
 
+email = MIMEMultipart()
+email["From"] = values.EMAIL_LOGIN
+email["To"] = values.PUB_EMAIL
+email["Subject"] = f"Kitchen LC Compliance tracker {wc_date}"
+email.attach(MIMEText("Auto generated template for this week", "plain"))
+with open(filename, "rb") as attachment:  #Read binary
+
+    payload = MIMEBase('application', "octet-stream") #The "octet-stream" subtype is used to indicate
+                                                        # that a body contains arbitrary binary data.
+    payload.set_payload((attachment.read()))
+    encoders.encode_base64(payload) #Must be base64 encoded to send
+    payload.add_header("Content-Disposition",
+                        "attachment; filename={}".format(Path(filename).name))
+    email.attach(payload)
+
+    with smtplib.SMTP("smtp.gmail.com") as connection:
+        connection.starttls()
+        connection.login(user=values.EMAIL_LOGIN, password=values.EMAIL_APP_PASSWORD)
+        connection.sendmail(
+            from_addr=values.EMAIL_LOGIN,
+            to_addrs=values.PUB_EMAIL,
+            msg=email.as_string()
+        )
 
 
 
