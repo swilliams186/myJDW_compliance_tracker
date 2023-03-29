@@ -17,94 +17,96 @@ import logging
 
 #
 s = requests.session()
-# homepage = s.get(values.URL)
-# soup = bs(homepage.text, "html.parser")
-# csrf_name = soup.find(attrs={"name":values.KEY_CSRF_NAME}).get("value")
-# csrf_token = soup.find(attrs={"name":values.KEY_CSRF_TOKEN}).get("value")
-#
-# #print(tag_inputs)
-# logging.info(f"{values.KEY_CSRF_NAME}: {csrf_name}")
-# logging.info(f"{values.KEY_CSRF_TOKEN}: {csrf_token}")
-#
-#
-# login_payload = {
-#     values.KEY_LOGIN: values.LOGIN,
-#     values.KEY_PASSWORD: values.PASSWORD,
-#     values.KEY_CSRF_NAME: csrf_name,
-#     values.KEY_CSRF_TOKEN: csrf_token
-# }
-#
-# login_result = s.post(values.LOGIN_REQ_URL, headers=values.HEADERS, data=login_payload)
+homepage = s.get(values.URL)
+soup = bs(homepage.text, "html.parser")
+csrf_name = soup.find(attrs={"name":values.KEY_CSRF_NAME}).get("value")
+csrf_token = soup.find(attrs={"name":values.KEY_CSRF_TOKEN}).get("value")
+
+#print(tag_inputs)
+logging.info(f"{values.KEY_CSRF_NAME}: {csrf_name}")
+logging.info(f"{values.KEY_CSRF_TOKEN}: {csrf_token}")
+
+
+login_payload = {
+    values.KEY_LOGIN: values.LOGIN,
+    values.KEY_PASSWORD: values.PASSWORD,
+    values.KEY_CSRF_NAME: csrf_name,
+    values.KEY_CSRF_TOKEN: csrf_token
+}
+
+login_result = s.post(values.LOGIN_REQ_URL, headers=values.HEADERS, data=login_payload)
 # #TODO ensure result is correct and login was succesfull.
+
+
 
 def formatDateString(unformatedString: string) -> string:
     return unformatedString.split("<span>")
 
 
+rota_html = s.get(values.ROTA_URL)
+soup = bs(rota_html.text, "html.parser")
 
-with open("example-rota.html") as doc:
-    # rota_html = s.get("./example-rota.html")
-    soup = bs(doc, "html.parser")
+pprint(soup.prettify())
 
-    """Deal with the dates and title"""
-    dates = soup.findAll("th",{"class":"day"}, limit=7) #Collect the first 7 results (each day of the week)
+"""Deal with the dates and title"""
+dates = soup.findAll("th",{"class":"day"}, limit=7) #Collect the first 7 results (each day of the week)
 
-    wc_date = dates[0].get_text()[3:8]  #Used for file naming and title of spreadsheet, removes /n
-    day_strings = [day.get_text().strip()[:3] + " " + day.get_text().strip()[3:]    #Adds a space and cleans up
-                   for day in dates]
-
-
-
-    """" Deals with the employees and their rotas  """
-
-    rotas = soup.findAll(attrs={"class": "employee-name"},
-                         string=values.KITCHEN_NAMES)  # You can pass a list in? AWESOME!
+wc_date = dates[0].get_text()[3:8]  #Used for file naming and title of spreadsheet, removes /n
+day_strings = [day.get_text().strip()[:3] + " " + day.get_text().strip()[3:]    #Adds a space and cleans up
+               for day in dates]
 
 
-    # TODO For each kitchen staff, jump to parent element then extract all class='day text-center"
-    extracted_rotas = {}
-    for manager in rotas:
-        shifts = []
-        managerName = manager.text
-        week = manager.find_parent().findAll(attrs={"class": "day"})
-        for day in week:
-            strippedText = day.get_text("<br>").strip()  # Strips leading escape chars . Value will be
-            # similar to '06:00am - 03:00pm                Kitchen)'
 
-            # TODO figure out how to cope with split shifts . if len(splitText) > 4 indicates muktiple
-            #This just strips out any split shifts for now
-            #Could use [::2] to just extract times as that's how it's formatted
-            #len% 4 could show how many shifts, and each 4th entry is the shift type
+"""" Deals with the employees and their rotas  """
 
-            splitText = strippedText.split()[:4]  # Now looks something like
-                                            # ['12:00pm', '-', '10:00pm', '<br>(Kitchen)<br>']
-
-            if(len(strippedText) != 0):
-
-                # convert times to 24 hour clock
-                # %H is the 24 hour clock, %I is the 12 hour clock and when using the 12 hour clock,
-                # %p qualifies if it is AM or PM. strp = parse, strf = format
-                startTime = datetime.strptime(splitText[0], "%I:%M%p")  #This will have year and date attached
-                startTime = datetime.strftime(startTime,"%H:%M")    #Strips that out, is now 24 hour 14:45
-                endTime = datetime.strptime(splitText[2], "%I:%M%p")
-                endTime = datetime.strftime(endTime, "%H:%M")
-
-                # TODO ignore meetings
+rotas = soup.findAll(attrs={"class": "employee-name"},
+                     string=values.KITCHEN_NAMES)  # You can pass a list in? AWESOME!
 
 
-                shifts.append({"start": startTime,
-                               "end":   endTime})
-                #Example data structure
-                # 'ROBBINS, WILL': [None,
-                #                   {'end': '20:30', 'start': '11:00'},
-                #                   {'end': '23:45', 'start': '17:30'},
+# TODO For each kitchen staff, jump to parent element then extract all class='day text-center"
+extracted_rotas = {}
+for manager in rotas:
+    shifts = []
+    managerName = manager.text
+    week = manager.find_parent().findAll(attrs={"class": "day"})
+    for day in week:
+        strippedText = day.get_text("<br>").strip()  # Strips leading escape chars . Value will be
+        # similar to '06:00am - 03:00pm                Kitchen)'
 
-            else: #If no shift that day
-                shifts.append({"start": "day",
-                             "end":    "off"})
+        # TODO figure out how to cope with split shifts . if len(splitText) > 4 indicates muktiple
+        #This just strips out any split shifts for now
+        #Could use [::2] to just extract times as that's how it's formatted
+        #len% 4 could show how many shifts, and each 4th entry is the shift type
+
+        splitText = strippedText.split()[:4]  # Now looks something like
+                                        # ['12:00pm', '-', '10:00pm', '<br>(Kitchen)<br>']
+
+        if(len(strippedText) != 0):
+
+            # convert times to 24 hour clock
+            # %H is the 24 hour clock, %I is the 12 hour clock and when using the 12 hour clock,
+            # %p qualifies if it is AM or PM. strp = parse, strf = format
+            startTime = datetime.strptime(splitText[0], "%I:%M%p")  #This will have year and date attached
+            startTime = datetime.strftime(startTime,"%H:%M")    #Strips that out, is now 24 hour 14:45
+            endTime = datetime.strptime(splitText[2], "%I:%M%p")
+            endTime = datetime.strftime(endTime, "%H:%M")
+
+            # TODO ignore meetings
 
 
-            extracted_rotas[managerName] = shifts
+            shifts.append({"start": startTime,
+                           "end":   endTime})
+            #Example data structure
+            # 'ROBBINS, WILL': [None,
+            #                   {'end': '20:30', 'start': '11:00'},
+            #                   {'end': '23:45', 'start': '17:30'},
+
+        else: #If no shift that day
+            shifts.append({"start": "day",
+                         "end":    "off"})
+
+
+        extracted_rotas[managerName] = shifts
 
 
 wb = openpyxl.load_workbook(filename="compliance-tracker-template3.xlsx")
@@ -118,7 +120,6 @@ for row_index, manager in enumerate(extracted_rotas, values.NAME_COLUMN_START):
 
 
     day_colums = string.ascii_uppercase[values.MAPPINGS['MONDAY']:15]  #6 kitchen staff #B - H for example
-    print(day_colums)
     for x, day in enumerate(day_colums[::2]):    #Add days of week and dates,
         print(ws[f"{day}3"])
         ws[f"{day}3"] = day_strings[x]
@@ -136,7 +137,7 @@ for row_index, manager in enumerate(extracted_rotas, values.NAME_COLUMN_START):
         if extracted_rotas[manager][y]['start'] != "day":
             #TODO THIS IS REALLY SLOPPY
             ws[f"{day_colums[(y*2) + 1]}{row_index}"] = "N"
-            print(f"DAY: {day} , day+1: {day_colums[(y*2) + 1]}")
+
                           #COULD USE INDEX OF day in colums
 
 filename = f"compliance-tracker-wc{wc_date.replace('/', '-')}.xlsx"
